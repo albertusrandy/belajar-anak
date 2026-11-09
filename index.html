@@ -1,1 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belajar Tambah | Let’s Add</title>
+<style>
+  /* 1. WARNA: ubah di sini kalau mau ganti tema */
+  :root{--ink:#1B2A4A;--paper:#EAF4FF;--line:#C9E0F7;--blue:#2F6FED;--sun:#FFC93C;--good:#0E7C61;--bad:#C42350}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;color:var(--ink);
+    font-family:ui-rounded,"Nunito","Trebuchet MS",system-ui,sans-serif;
+    background-color:var(--paper);
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:28px 28px}
+  button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+  button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+  .card{width:min(100%,520px);background:#fff;border:3px solid var(--ink);border-radius:24px;padding:20px;box-shadow:6px 6px 0 var(--ink)}
+  header{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  h1{font-size:1.4rem;margin:0}
+  .lang button{border:2px solid var(--ink);background:#fff;padding:6px 12px;border-radius:12px;font-weight:700}
+  .lang button[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .stats{display:flex;gap:10px;margin:14px 0}
+  .stats div{flex:1;border:2px solid var(--ink);border-radius:14px;padding:8px 12px;background:var(--sun);font-weight:700}
+  .stats b{display:block;font-size:1.6rem}
 
+  /* 2. SOAL: tiga kolom (tanda, puluhan, satuan) */
+  .sum{display:grid;grid-template-columns:56px 88px 88px;justify-content:center;gap:6px;margin:18px 0 8px}
+  .sum .n{font-size:3.6rem;font-weight:800;text-align:center;line-height:1.15}
+  .sum .op{font-size:3rem;font-weight:800;text-align:center;align-self:center}
+  .sum hr{grid-column:1/-1;border:0;border-top:4px solid var(--ink);margin:4px 0;width:100%}
+  .slot{height:84px;border:3px dashed var(--ink);border-radius:16px;background:#fff;font-size:3.6rem;font-weight:800}
+  .slot.filled{border-style:solid;background:var(--paper)}
+  #msg{min-height:2rem;text-align:center;font-weight:700;font-size:1.15rem;margin:6px 0 12px}
+  #msg.good{color:var(--good)} #msg.bad{color:var(--bad)}
+
+  /* 3. TOMBOL ANGKA & AKSI */
+  .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .pad button{height:68px;border:3px solid var(--ink);border-radius:16px;background:var(--blue);color:#fff;font-size:2rem;font-weight:800}
+  .pad button:active{transform:translateY(2px)}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .actions button{height:60px;border:3px solid var(--ink);border-radius:16px;font-size:1.3rem;font-weight:800;background:#fff}
+  #check{background:var(--sun)}
+  #check:disabled{opacity:.45;cursor:not-allowed}
+  @media (prefers-reduced-motion:no-preference){
+    .shake{animation:shake .35s}
+    @keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  }
+</style>
+</head>
+<body>
+<main class="card">
+  <header>
+    <h1 data-t="title"></h1>
+    <div class="lang">
+      <button id="lang-id" aria-pressed="true">ID</button>
+      <button id="lang-en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div><span data-t="score"></span><b id="score">0</b></div>
+    <div><span data-t="streak"></span><b id="streak">0</b></div>
+  </div>
+
+  <div class="sum" id="sum">
+    <span></span><span class="n" id="a1"></span><span class="n" id="a0"></span>
+    <span class="op">+</span><span></span><span class="n" id="b"></span>
+    <hr>
+    <span></span>
+    <button class="slot" id="s1" aria-label="tens"></button>
+    <button class="slot" id="s0" aria-label="ones"></button>
+  </div>
+
+  <p id="msg" role="status" aria-live="polite"></p>
+  <div class="pad" id="pad"></div>
+  <div class="actions">
+    <button id="clear" data-t="clear"></button>
+    <button id="check" data-t="check" disabled></button>
+  </div>
+</main>
+
+<script>
+  // 4. TEKS DUA BAHASA: tambah kata baru di sini
+  const T = {
+    id: {title:"Belajar Tambah", score:"Skor", streak:"Beruntun", check:"Cek", clear:"Hapus",
+         hint:"Ketuk angka untuk mengisi jawaban.", ok:"Benar! +", no:"Belum tepat. Coba lagi!"},
+    en: {title:"Let’s Add", score:"Score", streak:"Streak", check:"Check", clear:"Clear",
+         hint:"Tap the digits to fill in the answer.", ok:"Correct! +", no:"Not quite. Try again!"}
+  };
+  let lang = "id", score = 0, streak = 0, q = null, ans = ["", ""], locked = false; // ans[0]=satuan, ans[1]=puluhan
+  const $ = id => document.getElementById(id);
+  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+  // 5. SOAL LEVEL 1: satuan dijumlah tidak lebih dari 9 (tanpa menyimpan/carry)
+  function newQuestion() {
+    const a1 = rand(1, 9), a0 = rand(0, 8), b = rand(1, 9 - a0);
+    q = {a1, a0, b, sum: a1 * 10 + a0 + b};
+    ans = ["", ""]; locked = false;
+    $("a1").textContent = a1; $("a0").textContent = a0; $("b").textContent = b;
+    setMsg(T[lang].hint, "");
+    draw();
+  }
+  function draw() {
+    ["s0", "s1"].forEach((id, i) => {
+      $(id).textContent = ans[i];
+      $(id).classList.toggle("filled", ans[i] !== "");
+    });
+    $("check").disabled = locked || ans[0] === "" || ans[1] === "";
+  }
+  function setMsg(text, cls) { $("msg").textContent = text; $("msg").className = cls; }
+
+  function tapDigit(d) {
+    if (locked) return;
+    if (ans[0] === "") ans[0] = d; else if (ans[1] === "") ans[1] = d;
+    draw();
+  }
+  function checkAnswer() {
+    if (locked) return;
+    if (Number(ans[1] + ans[0]) === q.sum) {
+      streak++;
+      const points = 10 + Math.min(streak - 1, 4) * 5; // bonus beruntun, maksimal +20
+      score += points; locked = true;
+      $("score").textContent = score; $("streak").textContent = streak;
+      setMsg(T[lang].ok + points, "good"); draw();
+      setTimeout(newQuestion, 1200);
+    } else {
+      streak = 0; $("streak").textContent = streak;
+      setMsg(T[lang].no, "bad");
+      const sum = $("sum"); sum.classList.remove("shake"); void sum.offsetWidth; sum.classList.add("shake");
+      ans = ["", ""]; draw();
+    }
+  }
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-t]").forEach(el => el.textContent = T[lang][el.dataset.t]);
+    $("lang-id").setAttribute("aria-pressed", lang === "id");
+    $("lang-en").setAttribute("aria-pressed", lang === "en");
+    if (!locked) setMsg(T[lang].hint, "");
+  }
+
+  // Pasang tombol angka 0-9 dan semua klik
+  for (let d = 0; d <= 9; d++) {
+    const btn = document.createElement("button");
+    btn.textContent = d; btn.addEventListener("click", () => tapDigit(String(d)));
+    $("pad").appendChild(btn);
+  }
+  $("s0").addEventListener("click", () => { if (!locked) { ans[0] = ""; draw(); } });
+  $("s1").addEventListener("click", () => { if (!locked) { ans[1] = ""; draw(); } });
+  $("clear").addEventListener("click", () => { if (!locked) { ans = ["", ""]; draw(); } });
+  $("check").addEventListener("click", checkAnswer);
+  $("lang-id").addEventListener("click", () => { lang = "id"; applyLang(); });
+  $("lang-en").addEventListener("click", () => { lang = "en"; applyLang(); });
+
+  applyLang();
+  newQuestion();
+</script>
+</body>
+</html>
